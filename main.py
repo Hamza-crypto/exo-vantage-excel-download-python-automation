@@ -45,6 +45,30 @@ def save_file(download, file_name):
     os.remove(downloaded_file_name)    
     time.sleep(2)    
         
+
+def select_scheme_option(page, option_value):
+    # Click the selectize dropdown to load the options
+    page.locator("#SchemeId + div .selectize-input").click()
+
+    # Wait for the options to be visible
+    options = page.locator(".selectize-dropdown-content .option")
+    page.wait_for_selector(".selectize-dropdown-content .option")
+
+    # Loop through each option and select the matching one
+    option_count = options.count()
+    
+    for i in range(option_count):
+        current_value = options.nth(i).get_attribute("data-value")
+        option_text = options.nth(i).inner_text()
+        
+        # Match the desired value
+        if current_value == option_value:
+            print(f"Selecting scheme: {option_text} with value: {current_value}")
+            
+            # Click on the option to select it
+            options.nth(i).click()
+            break
+
 with sync_playwright() as playwright:
 
     browser = playwright.chromium.launch(headless=False)
@@ -58,49 +82,14 @@ with sync_playwright() as playwright:
     page.get_by_label("Date Type").select_option("Audit Passed")
     page.get_by_text("No", exact=True).click()
     
-   
-    # Click to open the dropdown so options get loaded
-    page.locator("#SchemeId + div .selectize-input").click()
+    select_scheme_option(page, "5")
+    print('5 selected')
+    time.sleep(5)
+    select_scheme_option(page, "40")
+    print('40 selected')
 
-    # Get all dynamically loaded options from the dropdown
-    options = page.locator(".selectize-dropdown-content .option")
-
-    # Loop through each option and select it
-    option_count = options.count()
+    page.pause()
     
-    print(option_count)
-    # page.pause()
-    # time.sleep(2)
-    
-    for i in range(option_count):
-        page.locator("#SchemeId + div .selectize-input").click()
-        option_value = options.nth(i).get_attribute("data-value")
-        option_text = options.nth(i).inner_text()
-        
-        if option_value:  # Skip empty value
-            print(f"Selecting scheme: {option_text} value: {option_value}")
-            
-            # Click the option to select it
-            options.nth(i).click()
-            
-            # Fill in the date range and click export
-            page.locator("#DateFrom").fill('01-Sep-2024')
-            page.locator("#DateTo").fill('28-Sep-2024')
-            sleep(1)
-            
-            continue
-            
-            # Export the report for the current scheme
-            page.locator("#ExportButton").click()
-            with page.expect_download() as download_info:
-                page.locator("#ExportButton").click()
-            download = download_info.value
-          
-            exit()
-            # Save the file with a unique name per scheme
-            save_file(download, f"{option_text}-EMVIC-VCUSTOMER-INVOICE-SUMMARY-REPORT-1")
-
-            time.sleep(2)  # Wait a bit between downloads
        
     time.sleep(2)
     context.close()
