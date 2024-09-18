@@ -5,9 +5,8 @@ import pandas as pd
 import time
 import os
 
-
-
 BASE_URL = "https://ecovantage.alitsy.com/Finance/CertificateBilling"
+# BASE_URL = "http://localhost:8523/"
 
 data = open("config.txt", "r")
 for x in data:
@@ -25,11 +24,12 @@ def login(page, context):
     time.sleep(1)
     if page.title() == 'Log in':
         print('Logging in ...')
-        page.get_by_placeholder("E-mail").fill(username)
-        page.get_by_placeholder("Password").fill(password)
+        page.get_by_label("E-mail").fill(username)
+        page.get_by_label("Password").fill(password)
         page.get_by_role("button", name="Log In").click()
         context.storage_state(path="auth.json")
-        
+    else:
+        print('Already Logged In')    
         
 def save_file(download, file_name):
     
@@ -47,32 +47,60 @@ def save_file(download, file_name):
         
 with sync_playwright() as playwright:
 
-    current_date1 = datetime.now()
-    one_year_ago = (current_date1 - timedelta(days=365)).strftime("%d-%m-%Y")
-    current_date2 = datetime.now()
-    next_day = (current_date2 + timedelta(days=1)).strftime("%d-%m-%Y")
-
     browser = playwright.chromium.launch(headless=False)
     context = browser.new_context(storage_state="auth.json")
     page = context.new_page()
     page.goto(BASE_URL)
     
     login(page, context)
-    
+    time.sleep(2)
     # Initial dropdown selection
     page.get_by_label("Date Type").select_option("Audit Passed")
     page.get_by_text("No", exact=True).click()
     
-    page.get_by_text("ESS Lighting").click()
+   
+    # Click to open the dropdown so options get loaded
+    page.locator("#SchemeId + div .selectize-input").click()
+
+    # Get all dynamically loaded options from the dropdown
+    options = page.locator(".selectize-dropdown-content .option")
+
+    # Loop through each option and select it
+    option_count = options.count()
     
-    page.locator("#DateFrom").fill('01-Sep-2024')
-    page.locator("#DateTo").fill('29-Sep-2024')
+    print(option_count)
+    # page.pause()
+    # time.sleep(2)
     
-    page.locator("#ExportButton").click()
-    with page.expect_download() as download_info:
-        page.locator("#ExportButton").click()
-    download = download_info.value
-    save_file(download, "EMVIC-VCUSTOMER-INVOICE-SUMMARY-REPORT-1")
+    for i in range(option_count):
+        page.locator("#SchemeId + div .selectize-input").click()
+        option_value = options.nth(i).get_attribute("data-value")
+        option_text = options.nth(i).inner_text()
+        
+        if option_value:  # Skip empty value
+            print(f"Selecting scheme: {option_text} value: {option_value}")
+            
+            # Click the option to select it
+            options.nth(i).click()
+            
+            # Fill in the date range and click export
+            page.locator("#DateFrom").fill('01-Sep-2024')
+            page.locator("#DateTo").fill('28-Sep-2024')
+            sleep(1)
+            
+            continue
+            
+            # Export the report for the current scheme
+            page.locator("#ExportButton").click()
+            with page.expect_download() as download_info:
+                page.locator("#ExportButton").click()
+            download = download_info.value
+          
+            exit()
+            # Save the file with a unique name per scheme
+            save_file(download, f"{option_text}-EMVIC-VCUSTOMER-INVOICE-SUMMARY-REPORT-1")
+
+            time.sleep(2)  # Wait a bit between downloads
        
     time.sleep(2)
     context.close()
