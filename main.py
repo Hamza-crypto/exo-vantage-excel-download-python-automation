@@ -1,11 +1,10 @@
 from playwright.sync_api import Playwright, sync_playwright
-import playwright.async_api
 from datetime import datetime, timedelta
 import pandas as pd
-import time
-import os
 import requests
 import calendar
+import time
+import os
 
 BASE_URL = "https://ecovantage.alitsy.com/Finance/CertificateBilling"
 # BASE_URL = "http://localhost:8523/"
@@ -179,20 +178,16 @@ with sync_playwright() as playwright:
         session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
     
      # Initial dropdown selection
+    
     page.get_by_label("Date Type").select_option("Audit Passed")
     page.get_by_text("No", exact=True).click()
-    
-    count = 1
+
     for option in scheme_options:
         option_value = int(option[0])
-        print(option[1])
         select_scheme_option(page, option_value)
-        time.sleep(2)
         for start_date, end_date in date_ranges:
-            print()
-            # post_request_with_saved_session(session, option_value, start_date, end_date)
+            post_request_with_saved_session(session, option_value, start_date, end_date)
         print('--------------------------------------------------------')
-        count = count + 1
     
        
     time.sleep(2)
