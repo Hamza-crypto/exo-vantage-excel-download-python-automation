@@ -5,6 +5,7 @@ import pandas as pd
 import time
 import os
 import requests
+import calendar
 
 BASE_URL = "https://ecovantage.alitsy.com/Finance/CertificateBilling"
 # BASE_URL = "http://localhost:8523/"
@@ -18,7 +19,7 @@ for x in data:
     if 'destination_path' in x:
         destination_path = x.replace('destination_path = ', '').replace('\n', '')  
     if 'number_of_months_to_go_back' in x:
-            number_of_months = x.replace('number_of_months_to_go_back = ', '').replace('\n', '')  
+            number_of_months = int(x.replace('number_of_months_to_go_back = ', '').replace('\n', ''))  
 
 
 def login(page, context):
@@ -32,48 +33,57 @@ def login(page, context):
     else:
         print('Already Logged In')    
       
-        
-def save_file(download, file_name):
+
+def save_file(content):
     
-    downloaded_file_name = "downloaded.csv"
-    download.save_as(downloaded_file_name)
+    downloaded_file_name = "downloaded.xlsx"
+    with open(downloaded_file_name, 'wb') as f:
+        f.write(content)
+
+    # Try reading the temporary file with the correct encoding
+    try:
+        downloaded_file = pd.read_excel(downloaded_file_name)
+    except Exception as e:
+        print(f"Error reading the Excel file: {e}")
+        return
     
-    downloaded_file = pd.read_csv('downloaded.csv')
-    current_date_today = datetime.now()
-    current_date_today = current_date_today.strftime("%Y%m%d%H%M%S")
-    file_name = destination_path + '/' +file_name + current_date_today + '.csv' 
+    current_date_time = datetime.now().strftime("%Y%m%d%H%M%S")
+    file_name = f"{destination_path}/alitsycertificatebillingcsv-{current_date_time}.csv"
     downloaded_file.to_csv(file_name, sep='|', index=False)
     print(f"File {file_name} downloaded successfully")
-    os.remove(downloaded_file_name)    
-    time.sleep(2)    
+    os.remove(downloaded_file_name)
+    time.sleep(2)      
 
 
-def select_scheme_option(page, option_value):
-    # Click the selectize dropdown to load the options
-    page.locator("#SchemeId + div .selectize-input").click()
-
-    # Wait for the options to be visible
-    options = page.locator(".selectize-dropdown-content .option")
-    page.wait_for_selector(".selectize-dropdown-content .option")
-
-    # Loop through each option and select the matching one
-    option_count = options.count()
+def get_month_date_ranges(months_to_go_back):
+    today = datetime.now()
+    date_ranges = []
     
-    for i in range(option_count):
-        current_value = int(options.nth(i).get_attribute("data-value"))
-        option_text = options.nth(i).inner_text()
+    # Generate date ranges for each month starting from the current month
+    for i in range(months_to_go_back):
+        # Calculate the year and month (i=0 will give current month)
+        year = today.year
+        month = today.month - i
         
-        # Match the desired value
-        if current_value == option_value:
-            print(f"Selecting scheme: {option_text} with value: {current_value}")
-            
-            # Click on the option to select it
-            options.nth(i).click()
-            break
+        # Adjust for year change when going back from January
+        if month <= 0:
+            month += 12
+            year -= 1
+
+        # Get the first and last day of the month
+        first_day = datetime(year, month, 1).strftime("%d-%b-%Y")
+        last_day = datetime(year, month, calendar.monthrange(year, month)[1]).strftime("%d-%b-%Y")
+
+        # Append to the list
+        date_ranges.insert(0, (first_day, last_day))
+    
+    return date_ranges
+
 
 # Now use the cookies to simulate the button click and perform a POST request
-def post_request_with_saved_session(cookies, scheme_value, date_from, date_to):
+def post_request_with_saved_session(session, scheme_value, date_from, date_to):
 
+    print(scheme_value, date_from, date_to)
     # Prepare the payload for the POST request (same as captured from browser dev tools)
     payload = {
         'submitAction': 'Export',
@@ -89,28 +99,20 @@ def post_request_with_saved_session(cookies, scheme_value, date_from, date_to):
         'ShowFinalised': 'true',
         'ShowFinalised': 'true'
     }
-
-    # Construct headers and include the cookies
-    session = requests.Session()
-    for cookie in cookies:
-        session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
-
-    # Perform the POST request with the saved session
-    response = session.post(BASE_URL, data=payload)
-
-    if response.status_code == 200:
-        print("POST request successful, downloading the file...")
-        # Save the downloaded file
-        file_name = 'downloaded_report.csv'  # Adjust as needed
-        with open(file_name, 'wb') as f:
-            f.write(response.content)
-        print(f"File saved as {file_name}")
-    else:
-        print(f"Failed to download file. Status Code: {response.status_code}")
-
+    
+    try:
+        response = session.post(BASE_URL, data=payload)
+        if response.status_code == 200:
+            print("Downloading the file...")
+            # Save the downloaded file
+            save_file(response.content)    
+        else:
+            print(f"Failed to download file. Status Code: {response.status_code}")
+    except e:
+        print(f"Error {e}")
 
 with sync_playwright() as playwright:
-
+        
     scheme_options = [
         (1, "ESS Lighting"),
         (43, "HEER HP"),
@@ -136,34 +138,31 @@ with sync_playwright() as playwright:
         (36, "VEU SH")
     ]
     
+    date_ranges = get_month_date_ranges(number_of_months)
+    
     browser = playwright.chromium.launch(headless=False)
     context = browser.new_context(storage_state="auth.json")
     page = context.new_page()
-    page.goto(BASE_URL)
+    page.goto(BASE_URL, wait_until="networkidle")
     
     login(page, context)
     time.sleep(2)
-
-    # Initial dropdown selection
-    # page.get_by_label("Date Type").select_option("Audit Passed")
-    # page.get_by_text("No", exact=True).click()
-    # select_scheme_option(page, 39)
-
-    date_from = "01-Sep-2024"    
-    date_to = "30-Sep-2024"    
-    # Get the session cookies after logging in
+    
     cookies = context.cookies()
-    post_request_with_saved_session(cookies, 39, date_from, date_to)
-    # with page.expect_download() as download_info:
-    #     page.frame_locator("iframe >> nth=1").frame_locator("#mainContent").get_by_role("button", name="Export To CSV").click()
-    # download = download_info.value
-    # save_file(download, "EMVIC-VCUSTOMER-INVOICE-SUMMARY-REPORT-1")
-
-    # for value, text in scheme_options:
-    #     select_scheme_option(page, value)
-    #     time.sleep(2)
-    time.sleep(5)
-    page.pause()
+    # Construct headers and include the cookies
+    session = requests.Session()
+    for cookie in cookies:
+        session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
+    
+    count = 1
+    for option in scheme_options:
+        option_value = int(option[0])
+        print(option[1])
+        for start_date, end_date in date_ranges:
+            
+            post_request_with_saved_session(session, option_value, start_date, end_date)
+        print('--------------------------------------------------------')
+        count = count + 1
     
        
     time.sleep(2)
