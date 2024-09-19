@@ -80,6 +80,30 @@ def get_month_date_ranges(months_to_go_back):
     return date_ranges
 
 
+def select_scheme_option(page, option_value):
+    # Click the selectize dropdown to load the options
+    page.locator("#SchemeId + div .selectize-input").click()
+
+    # Wait for the options to be visible
+    options = page.locator(".selectize-dropdown-content .option")
+    page.wait_for_selector(".selectize-dropdown-content .option")
+
+    # Loop through each option and select the matching one
+    option_count = options.count()
+    
+    for i in range(option_count):
+        current_value = int(options.nth(i).get_attribute("data-value"))
+        option_text = options.nth(i).inner_text()
+        
+        # Match the desired value
+        if current_value == option_value:
+            print(f"Selecting scheme: {option_text} with value: {current_value}")
+            
+            # Click on the option to select it
+            options.nth(i).click()
+            break
+        
+        
 # Now use the cookies to simulate the button click and perform a POST request
 def post_request_with_saved_session(session, scheme_value, date_from, date_to):
 
@@ -154,13 +178,19 @@ with sync_playwright() as playwright:
     for cookie in cookies:
         session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
     
+     # Initial dropdown selection
+    page.get_by_label("Date Type").select_option("Audit Passed")
+    page.get_by_text("No", exact=True).click()
+    
     count = 1
     for option in scheme_options:
         option_value = int(option[0])
         print(option[1])
+        select_scheme_option(page, option_value)
+        time.sleep(2)
         for start_date, end_date in date_ranges:
-            
-            post_request_with_saved_session(session, option_value, start_date, end_date)
+            print()
+            # post_request_with_saved_session(session, option_value, start_date, end_date)
         print('--------------------------------------------------------')
         count = count + 1
     
