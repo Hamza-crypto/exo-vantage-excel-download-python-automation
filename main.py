@@ -153,6 +153,7 @@ with sync_playwright() as playwright:
 
     for option in scheme_options:
         option_value = int(option[0])
+        print(option[1])
         select_scheme_option(page, option_value)
         for start_date, end_date in date_ranges:
             post_request_with_saved_session(session, option_value, start_date, end_date)
@@ -161,3 +162,4 @@ with sync_playwright() as playwright:
     time.sleep(2)
     context.close()
     browser.close()
+    print('All files downloaded successfully')
