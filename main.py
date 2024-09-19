@@ -1,14 +1,14 @@
 from playwright.sync_api import Playwright, sync_playwright
-from datetime import datetime, timedelta
 import pandas as pd
-import requests
-import calendar
 import time
 import os
+import requests
+import calendar
+from datetime import datetime
 
 BASE_URL = "https://ecovantage.alitsy.com/Finance/CertificateBilling"
-# BASE_URL = "http://localhost:8523/"
 
+# Read configuration
 data = open("config.txt", "r")
 for x in data:
     if 'username' in x:
@@ -18,8 +18,7 @@ for x in data:
     if 'destination_path' in x:
         destination_path = x.replace('destination_path = ', '').replace('\n', '')  
     if 'number_of_months_to_go_back' in x:
-            number_of_months = int(x.replace('number_of_months_to_go_back = ', '').replace('\n', ''))  
-
+        number_of_months = int(x.replace('number_of_months_to_go_back = ', '').replace('\n', ''))  
 
 def login(page, context):
     time.sleep(1)
@@ -30,112 +29,85 @@ def login(page, context):
         page.get_by_role("button", name="Log In").click()
         context.storage_state(path="auth.json")
     else:
-        print('Already Logged In')    
-      
+        print('Already Logged In')
 
 def save_file(content):
-    
     downloaded_file_name = "downloaded.xlsx"
     with open(downloaded_file_name, 'wb') as f:
         f.write(content)
 
-    # Try reading the temporary file with the correct encoding
     try:
         downloaded_file = pd.read_excel(downloaded_file_name)
     except Exception as e:
         print(f"Error reading the Excel file: {e}")
         return
-    
+
     current_date_time = datetime.now().strftime("%Y%m%d%H%M%S")
     file_name = f"{destination_path}/alitsycertificatebillingcsv-{current_date_time}.csv"
     downloaded_file.to_csv(file_name, sep='|', index=False)
     print(f"File {file_name} downloaded successfully")
     os.remove(downloaded_file_name)
-    time.sleep(2)      
-
+    time.sleep(2)
 
 def get_month_date_ranges(months_to_go_back):
     today = datetime.now()
     date_ranges = []
     
-    # Generate date ranges for each month starting from the current month
     for i in range(months_to_go_back):
-        # Calculate the year and month (i=0 will give current month)
         year = today.year
         month = today.month - i
         
-        # Adjust for year change when going back from January
         if month <= 0:
             month += 12
             year -= 1
 
-        # Get the first and last day of the month
         first_day = datetime(year, month, 1).strftime("%d-%b-%Y")
         last_day = datetime(year, month, calendar.monthrange(year, month)[1]).strftime("%d-%b-%Y")
 
-        # Append to the list
         date_ranges.insert(0, (first_day, last_day))
     
     return date_ranges
 
-
 def select_scheme_option(page, option_value):
-    # Click the selectize dropdown to load the options
     page.locator("#SchemeId + div .selectize-input").click()
-
-    # Wait for the options to be visible
-    options = page.locator(".selectize-dropdown-content .option")
     page.wait_for_selector(".selectize-dropdown-content .option")
-
-    # Loop through each option and select the matching one
+    options = page.locator(".selectize-dropdown-content .option")
     option_count = options.count()
     
     for i in range(option_count):
         current_value = int(options.nth(i).get_attribute("data-value"))
         option_text = options.nth(i).inner_text()
         
-        # Match the desired value
         if current_value == option_value:
-            print(f"Selecting scheme: {option_text} with value: {current_value}")
-            
-            # Click on the option to select it
             options.nth(i).click()
             break
-        
-        
-# Now use the cookies to simulate the button click and perform a POST request
-def post_request_with_saved_session(session, scheme_value, date_from, date_to):
 
+def post_request_with_saved_session(session, scheme_value, date_from, date_to):
     print(scheme_value, date_from, date_to)
-    # Prepare the payload for the POST request (same as captured from browser dev tools)
     payload = {
         'submitAction': 'Export',
         'InstallId': '',
         'ProjectId': '',
-        'SchemeId': scheme_value,  # Change as necessary
+        'SchemeId': scheme_value,
         'AgentId': '',
         'ProjectDescription': '',
         'TypeOfDateFilter': 'Audit Passed',
         'DateFrom': date_from,
         'DateTo': date_to,
         'RctiId': '',
-        'ShowFinalised': 'true',
         'ShowFinalised': 'true'
     }
     
     try:
         response = session.post(BASE_URL, data=payload)
-        if response.status_code == 200:
-            print("Downloading the file...")
-            # Save the downloaded file
-            save_file(response.content)    
-        else:
-            print(f"Failed to download file. Status Code: {response.status_code}")
-    except e:
-        print(f"Error {e}")
+        response.raise_for_status()
+        print("Downloading the file...")
+        save_file(response.content)    
+    except requests.exceptions.RequestException as e:
+        print(f"Request error: {e}")
 
 with sync_playwright() as playwright:
-        
+    
     scheme_options = [
         (1, "ESS Lighting"),
         (43, "HEER HP"),
@@ -172,12 +144,9 @@ with sync_playwright() as playwright:
     time.sleep(2)
     
     cookies = context.cookies()
-    # Construct headers and include the cookies
     session = requests.Session()
     for cookie in cookies:
         session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
-    
-     # Initial dropdown selection
     
     page.get_by_label("Date Type").select_option("Audit Passed")
     page.get_by_text("No", exact=True).click()
@@ -189,7 +158,6 @@ with sync_playwright() as playwright:
             post_request_with_saved_session(session, option_value, start_date, end_date)
         print('--------------------------------------------------------')
     
-       
     time.sleep(2)
     context.close()
     browser.close()
