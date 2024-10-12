@@ -1,3 +1,4 @@
-/*.docs
+*.docx
+*.csv
 auth.json
 config.txt
