@@ -2,3 +2,5 @@ username = username@example.com
 password = password@example
 number_of_months_to_go_back = 2
 destination_path = E:\ABC\output/
+RCTIFile = false
+ComplianceFile = true
