@@ -51,6 +51,7 @@ def save_file(content, filename, extension='csv'):
     file_name = f"{destination_path}/{filename}-{current_date_time}.csv"
     downloaded_file.to_csv(file_name, sep='|', index=False)
     print(f"File {file_name} downloaded successfully")
+    print()
     os.remove(downloaded_file_name)
     time.sleep(2)
 
@@ -89,33 +90,37 @@ def post_request(session, url, payload, filename, extension='csv'):
 
 def process_scheme_options(page, session, scheme_options, date_ranges, report_type="rcti"):
     for option_value, option_name in scheme_options:
-        print(option_name)
-        if report_type == 'rcti':
-            select_scheme_option(page, option_value)
-        for start_date, end_date in date_ranges:
-            print()
-            print(start_date, end_date)
-            if report_type == "rcti":
-                payload = {
-                    'submitAction': 'Export',
-                    'SchemeId': option_value,
-                    'TypeOfDateFilter': 'Audit Passed',
-                    'DateFrom': start_date,
-                    'DateTo': end_date,
-                    'ShowFinalised': 'true'
-                }
-                post_request(session, BASE_URL, payload, f'alitsycertificatebillingcsv', 'xlsx')
-            else:
-                payload = {
-                    'submitAction': 'ExportCsv',
-                    'SchemeId': option_value,
-                    'TypeOfDateFilter': 'Audit Assigned',
-                    'DateFrom': start_date,
-                    'DateTo': end_date,
-                    'ExcludeRegistered': 'false'
-                }
-                post_request(session, 'https://ecovantage.alitsy.com/Report/ComplianceSummary', payload, f'alitsycompliancesummarycsv-{option_name.replace(" ", "-")}')
-
+        try:
+            print(option_name)
+            if report_type == 'rcti':
+                select_scheme_option(page, option_value)
+            for start_date, end_date in date_ranges:
+                print()
+                print(start_date, end_date)
+                if report_type == "rcti":
+                    payload = {
+                        'submitAction': 'Export',
+                        'SchemeId': option_value,
+                        'TypeOfDateFilter': 'Audit Passed',
+                        'DateFrom': start_date,
+                        'DateTo': end_date,
+                        'ShowFinalised': 'true'
+                    }
+                    post_request(session, BASE_URL, payload, f'alitsycertificatebillingcsv', 'xlsx')
+                else:
+                    payload = {
+                        'submitAction': 'ExportCsv',
+                        'SchemeId': option_value,
+                        'TypeOfDateFilter': 'Audit Assigned',
+                        'DateFrom': start_date,
+                        'DateTo': end_date,
+                        'ExcludeRegistered': 'false'
+                    }
+                    post_request(session, 'https://ecovantage.alitsy.com/Report/ComplianceSummary', payload, f'alitsycompliancesummarycsv-{option_name.replace(" ", "-")}')
+        except Exception as e:
+            print(f"Error processing scheme {option_name}: {str(e)}")
+            print('**************************************************')
+            
 def setup_session_and_context(playwright):
     browser = playwright.chromium.launch(headless=False)
     context = browser.new_context(storage_state="auth.json")
