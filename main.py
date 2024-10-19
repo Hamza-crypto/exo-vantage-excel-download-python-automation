@@ -1,4 +1,4 @@
-from playwright.sync_api import Playwright, sync_playwright
+from playwright.sync_api import Playwright, sync_playwright 
 import pandas as pd
 import time
 import os
@@ -25,6 +25,7 @@ destination_path = config.get('destination_path')
 number_of_months = config.get('number_of_months_to_go_back')
 rcti_file = config.get('rctifile', 'false').lower() == 'true'
 compliance_file = config.get('compliancefile', 'false').lower() == 'true'
+install_product_details_file = config.get('installproductdetailsfile', 'false').lower() == 'true'
 
 def login(page, context):
     time.sleep(1)
@@ -107,7 +108,7 @@ def process_scheme_options(page, session, scheme_options, date_ranges, report_ty
                         'ShowFinalised': 'true'
                     }
                     post_request(session, BASE_URL, payload, f'alitsycertificatebillingcsv', 'xlsx')
-                else:
+                elif report_type == "compliance":
                     payload = {
                         'submitAction': 'ExportCsv',
                         'SchemeId': option_value,
@@ -117,10 +118,21 @@ def process_scheme_options(page, session, scheme_options, date_ranges, report_ty
                         'ExcludeRegistered': 'false'
                     }
                     post_request(session, 'https://ecovantage.alitsy.com/Report/ComplianceSummary', payload, f'alitsycompliancesummarycsv-{option_name.replace(" ", "-")}')
+                elif report_type == "install_product_details":
+                    payload = {
+                        'submitAction': 'ExportCsv',
+                        'SchemeList': option_value,
+                        'TypeOfDateFilter': 'Commencement Date',
+                        'DateFrom': start_date,
+                        'DateTo': end_date,
+                        'IncludeCancelledJobs': 'true',
+                        'IncludeAddOns': 'true'
+                    }
+                    post_request(session, 'https://ecovantage.alitsy.com/Report/InstallProductDetail', payload, f'alitsyinstallproductdetail-{option_name.replace(" ", "-")}')
         except Exception as e:
             print(f"Error processing scheme {option_name}: {str(e)}")
             print('**************************************************')
-            
+
 def setup_session_and_context(playwright):
     browser = playwright.chromium.launch(headless=False)
     context = browser.new_context(storage_state="auth.json")
@@ -138,7 +150,7 @@ def setup_session_and_context(playwright):
 
 with sync_playwright() as playwright:
     date_ranges = get_month_date_ranges(number_of_months)
-    scheme_options = scheme_options = [
+    scheme_options = [
         (1, "ESS Lighting"),
         (43, "HEER HP"),
         (40, "HEER HVAC"),
@@ -184,9 +196,24 @@ with sync_playwright() as playwright:
             print('------------------------Compliance Files Completed--------------------------------')
         except Exception as e:
             print(f"Error processing Compliance files: {str(e)}")
+            
+    if install_product_details_file:
+        try:
+            scheme_options.append((51, "Warranty"))
+            BASE_URL = 'https://ecovantage.alitsy.com/Report/InstallProductDetail'
+            page.goto(BASE_URL, wait_until="networkidle")
+            page.get_by_label("Date Type").select_option("Commencement Date")
+            page.get_by_text("No", exact=True).first.click()
+            page.get_by_text("No", exact=True).nth(1).click()
+            process_scheme_options(page, session, scheme_options, date_ranges, report_type="install_product_details")
+            print('------------------------Install Product Details Files Completed--------------------------------')
+        except Exception as e:
+            print(f"Error processing Install Product Details files: {str(e)}")
     
     print('All files downloaded successfully.')
     print('Browser will autoclose in 10 seconds.')
     time.sleep(10)
     context.close()
     browser.close()
+
+# --load-storage=auth.json
