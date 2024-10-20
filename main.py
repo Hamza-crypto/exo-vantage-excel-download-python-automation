@@ -94,7 +94,6 @@ def process_scheme_options(page, session, scheme_options, date_ranges, report_ty
     for option_value, option_name in scheme_options:
         try:
             print(option_name)
-            continue
             if report_type == 'rcti':
                 select_scheme_option(page, option_value)
             for start_date, end_date in date_ranges:
@@ -150,6 +149,12 @@ def setup_session_and_context(playwright):
     
     return session, page, context, browser
 
+def handle_scheme_exception(default_options, error_message="Using default scheme options due to error"):
+    print(error_message)
+    tb = traceback.format_exc()
+    print(f"Traceback:\n{tb}")
+    return default_options
+
 with sync_playwright() as playwright:
     date_ranges = get_month_date_ranges(number_of_months)
     default_scheme_options = [
@@ -196,10 +201,7 @@ with sync_playwright() as playwright:
                     scheme_options = default_scheme_options
                 print()
             except Exception as e:
-                scheme_options = default_scheme_options
-                print(f"Using default scheme options due to error")
-                tb = traceback.format_exc()
-                print(f"Traceback:\n{tb}")
+                scheme_options = handle_scheme_exception(default_scheme_options)
             
             page.get_by_label("Date Type").select_option("Audit Passed")
             page.get_by_text("No", exact=True).click()
@@ -227,10 +229,7 @@ with sync_playwright() as playwright:
                     scheme_options = default_scheme_options
                     
             except Exception as e:
-                scheme_options = default_scheme_options
-                print(f"Using default scheme options due to error")
-                tb = traceback.format_exc()
-                print(f"Traceback:\n{tb}")
+                scheme_options = handle_scheme_exception(default_scheme_options)
             
             process_scheme_options(page, session, scheme_options, date_ranges, report_type="compliance")
             print('------------------------Compliance Files Completed--------------------------------')
@@ -260,10 +259,7 @@ with sync_playwright() as playwright:
                     scheme_options = default_scheme_options
                     
             except Exception as e:
-                scheme_options = default_scheme_options
-                print(f"Using default scheme options due to error")
-                tb = traceback.format_exc()
-                print(f"Traceback:\n{tb}")
+                scheme_options = handle_scheme_exception(default_scheme_options)
             
             process_scheme_options(page, session, scheme_options, date_ranges, report_type="install_product_details")
             print('------------------------Install Product Details Files Completed--------------------------------')
