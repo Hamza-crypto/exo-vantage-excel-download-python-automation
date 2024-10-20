@@ -140,7 +140,7 @@ def setup_session_and_context(playwright):
     page = context.new_page()
     page.goto(BASE_URL, timeout=0)
     login(page, context)
-    # time.sleep(2)
+    time.sleep(2)
     
     cookies = context.cookies()
     session = requests.Session()
@@ -238,7 +238,6 @@ with sync_playwright() as playwright:
             
     if install_product_details_file:
         try:
-            
             BASE_URL = 'https://ecovantage.alitsy.com/Report/InstallProductDetail'
             page.goto(BASE_URL, wait_until="networkidle")
             
@@ -265,8 +264,6 @@ with sync_playwright() as playwright:
             print('------------------------Install Product Details Files Completed--------------------------------')
         except Exception as e:
             print(f"Error processing Install Product Details files: {str(e)}")
-            tb = traceback.format_exc()
-            print(f"Traceback:\n{tb}")
     
     print('All files downloaded successfully.')
     print('Browser will autoclose in 10 seconds.')
