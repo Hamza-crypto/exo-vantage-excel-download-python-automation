@@ -5,6 +5,7 @@ import os
 import requests
 import calendar
 from datetime import datetime
+import traceback
 
 BASE_URL = "https://ecovantage.alitsy.com/Finance/CertificateBilling"
 
@@ -28,7 +29,7 @@ compliance_file = config.get('compliancefile', 'false').lower() == 'true'
 install_product_details_file = config.get('installproductdetailsfile', 'false').lower() == 'true'
 
 def login(page, context):
-    time.sleep(1)
+    # time.sleep(1)
     if page.title() == 'Log in':
         print('Logging in...')
         page.get_by_label("E-mail").fill(username)
@@ -93,6 +94,7 @@ def process_scheme_options(page, session, scheme_options, date_ranges, report_ty
     for option_value, option_name in scheme_options:
         try:
             print(option_name)
+            continue
             if report_type == 'rcti':
                 select_scheme_option(page, option_value)
             for start_date, end_date in date_ranges:
@@ -139,7 +141,7 @@ def setup_session_and_context(playwright):
     page = context.new_page()
     page.goto(BASE_URL, timeout=0)
     login(page, context)
-    time.sleep(2)
+    # time.sleep(2)
     
     cookies = context.cookies()
     session = requests.Session()
@@ -150,7 +152,7 @@ def setup_session_and_context(playwright):
 
 with sync_playwright() as playwright:
     date_ranges = get_month_date_ranges(number_of_months)
-    scheme_options = [
+    default_scheme_options = [
         (1, "ESS Lighting"),
         (43, "HEER HP"),
         (40, "HEER HVAC"),
@@ -179,6 +181,26 @@ with sync_playwright() as playwright:
     
     if rcti_file:
         try:
+            try:
+                scheme_options = []
+                page.locator("#SchemeId + div .selectize-input").click()
+                page.wait_for_selector(".selectize-dropdown-content .option")
+                options = page.locator(".selectize-dropdown-content .option")
+                for i in range(options.count()):
+                    option_value = options.nth(i).get_attribute("data-value")
+                    option_text = options.nth(i).text_content()
+                    scheme_options.append((int(option_value), option_text.strip()))
+                    
+                if not scheme_options or len(scheme_options) == 0:
+                    print("Scheme options not captured, using default scheme options.")
+                    scheme_options = default_scheme_options
+                print()
+            except Exception as e:
+                scheme_options = default_scheme_options
+                print(f"Using default scheme options due to error")
+                tb = traceback.format_exc()
+                print(f"Traceback:\n{tb}")
+            
             page.get_by_label("Date Type").select_option("Audit Passed")
             page.get_by_text("No", exact=True).click()
             process_scheme_options(page, session, scheme_options, date_ranges, report_type="rcti")
@@ -192,6 +214,24 @@ with sync_playwright() as playwright:
             page.goto(BASE_URL, wait_until="networkidle")
             page.get_by_label("Date Type").select_option("Audit Assigned")
             page.get_by_text("Yes", exact=True).nth(1).click()
+            
+            try:
+                scheme_options = []
+                scheme_options = page.evaluate('''
+                    Array.from(document.querySelectorAll('#SchemeId option'))
+                        .filter(option => option.value && !isNaN(option.value))  // Filter out empty or NaN values
+                        .map(option => [parseInt(option.value), option.textContent.trim()]);
+                ''')
+                if not scheme_options or len(scheme_options) == 0:
+                    print("Scheme options not captured, using default scheme options.")
+                    scheme_options = default_scheme_options
+                    
+            except Exception as e:
+                scheme_options = default_scheme_options
+                print(f"Using default scheme options due to error")
+                tb = traceback.format_exc()
+                print(f"Traceback:\n{tb}")
+            
             process_scheme_options(page, session, scheme_options, date_ranges, report_type="compliance")
             print('------------------------Compliance Files Completed--------------------------------')
         except Exception as e:
@@ -199,16 +239,38 @@ with sync_playwright() as playwright:
             
     if install_product_details_file:
         try:
-            scheme_options.append((51, "Warranty"))
+            
             BASE_URL = 'https://ecovantage.alitsy.com/Report/InstallProductDetail'
             page.goto(BASE_URL, wait_until="networkidle")
+            
             page.get_by_label("Date Type").select_option("Commencement Date")
             page.get_by_text("No", exact=True).first.click()
             page.get_by_text("No", exact=True).nth(1).click()
+            try:
+                scheme_options = []
+                page.locator("div:nth-child(7) > .col-md-9 > .selectize-control > .selectize-input").click()
+                scheme_options = page.evaluate('''
+                    Array.from(document.querySelectorAll('.selectize-dropdown-content .option'))
+                    .filter(option => option.getAttribute('data-value'))  // Filter out empty values
+                    .map(option => [parseInt(option.getAttribute('data-value')), option.textContent.trim()]);
+                ''')
+                
+                if not scheme_options or len(scheme_options) == 0:
+                    print("Scheme options not captured, using default scheme options.")
+                    scheme_options = default_scheme_options
+                    
+            except Exception as e:
+                scheme_options = default_scheme_options
+                print(f"Using default scheme options due to error")
+                tb = traceback.format_exc()
+                print(f"Traceback:\n{tb}")
+            
             process_scheme_options(page, session, scheme_options, date_ranges, report_type="install_product_details")
             print('------------------------Install Product Details Files Completed--------------------------------')
         except Exception as e:
             print(f"Error processing Install Product Details files: {str(e)}")
+            tb = traceback.format_exc()
+            print(f"Traceback:\n{tb}")
     
     print('All files downloaded successfully.')
     print('Browser will autoclose in 10 seconds.')
